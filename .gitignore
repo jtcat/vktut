@@ -1,4 +1,7 @@
 VulkanTest
 vulkan_tutorial_en.pdf
+
 compile_commands.json
+.cache/
+
 *.o
