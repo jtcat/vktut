@@ -23,6 +23,12 @@ const std::vector<const char *>	deviceExtensions = {
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
 
+struct	SwapChainSupportDetails {
+	VkSurfaceCapabilitiesKHR		capabilities;
+	std::vector<VkSurfaceFormatKHR>	formats;
+	std::vector<VkPresentModeKHR>	presentModes;
+};
+
 struct	QueueFamilyIndices {
 	std::optional<uint32_t>	graphicsFamily;
 	std::optional<uint32_t>	presentFamily;
@@ -183,6 +189,30 @@ class	HelloTriangleApplication
 			std::cout << "Debug messenger has been setup" << std::endl;
 		}
 
+		SwapChainSupportDetails	querySwapChainSupport(VkPhysicalDevice device)
+		{
+			SwapChainSupportDetails	details;
+			uint32_t				formatCount;
+			uint32_t				presentModeCount;
+
+			vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);
+
+			vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
+			if (formatCount != 0) {
+				details.formats.resize(formatCount);
+				vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, details.formats.data());
+			}
+
+			vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, nullptr);
+			if (presentModeCount != 0) {
+				details.presentModes.resize(presentModeCount);
+				vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount,
+						details.presentModes.data());
+			}
+
+			return details;
+		}
+
 		QueueFamilyIndices	findQueueFamilies(VkPhysicalDevice device)
 		{
 			QueueFamilyIndices	indices;
@@ -239,6 +269,7 @@ class	HelloTriangleApplication
 			VkPhysicalDeviceFeatures		deviceFeatures;
 			QueueFamilyIndices				indices;
 			bool							extensionsSupported;
+			bool							swapChainAdequate = false;
 			int								score = 0;
 
 			vkGetPhysicalDeviceProperties(device, &deviceProperties);
@@ -246,12 +277,31 @@ class	HelloTriangleApplication
 			indices = findQueueFamilies(device);
 			extensionsSupported = checkDeviceExtensionSupport(device);
 
-			if (!extensionsSupported || !indices.isComplete() || !deviceFeatures.geometryShader) {
+			if (extensionsSupported) {
+				SwapChainSupportDetails	swapChainSupport = querySwapChainSupport(device);
+				swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
+			}
+
+			if (!extensionsSupported || !indices.isComplete() || !swapChainAdequate) {
 				return 0;
 			}
 
-			if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
-				score += 1000;
+			switch (deviceProperties.deviceType)
+			{
+				case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
+					score += 1000;
+					break;
+				case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
+					score += 500;
+					break;
+				case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
+					score+= 200;
+					break;
+				case VK_PHYSICAL_DEVICE_TYPE_CPU:
+					score+= 100;
+					break;
+				default:
+					break;
 			}
 
 			score += deviceProperties.limits.maxImageDimension2D;
