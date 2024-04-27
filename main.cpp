@@ -23,7 +23,7 @@ class	HelloTriangleApplication
 		const bool enableValidationLayers = true;
 #endif // NDEBUG
 
-		void	run()
+		void	run(void)
 		{
 			initWindow();
 			initVulkan();
@@ -35,12 +35,28 @@ class	HelloTriangleApplication
 		VkInstance	instance;
 		GLFWwindow*	window;
 
-		bool	checkValidationLayerSupport() {
+		std::vector<const char*>	getRequiredExtensions(void) {
+			uint32_t					glfwExtensionCount = 0;
+			const char**				glfwExtensions;
+
+			glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+
+			std::vector<const char *>	extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+
+			if (enableValidationLayers) {
+				extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+			}
+
+			return extensions;
+		}
+
+		bool	checkValidationLayerSupport(void) {
 			uint32_t						layerCount;
-			std::vector<VkLayerProperties>	availableLayers;
 
 			vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-			availableLayers = std::vector<VkLayerProperties>(layerCount);
+
+			std::vector<VkLayerProperties>	availableLayers(layerCount);
+
 			vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
 
 			for (const char* layerName : validationLayers) {
@@ -59,6 +75,19 @@ class	HelloTriangleApplication
 			}
 
 			return true;
+		}
+
+		std::vector<VkExtensionProperties>	getSupportedExtensions(void)
+		{
+			uint32_t	extensionCount = 0;
+			
+			vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+
+			std::vector<VkExtensionProperties>	extensions(extensionCount);
+
+			vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
+
+			return (extensions);
 		}
 
 		void	initWindow(void)
@@ -85,7 +114,7 @@ class	HelloTriangleApplication
 			}
 			glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 
-			// We can avoid determining an interesction betwee available
+			// We can avoid determining an intersection between available
 			// and required extensions, like the tutorial suggests, by
 			// simply checking if the call returns null.
 			if (glfwExtensions == nullptr) {
@@ -114,6 +143,13 @@ class	HelloTriangleApplication
 
 			if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS) {
 				throw std::runtime_error("failed to create instance");
+			}
+
+			std::vector<VkExtensionProperties>	supportedExtensions = getSupportedExtensions();
+
+			std::cout << "Available extensions:\n";
+			for (const auto& extension : supportedExtensions) {
+				std::cout << '\t' << extension.extensionName << '\n';
 			}
 		}
 
