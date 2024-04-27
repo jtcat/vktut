@@ -7,6 +7,29 @@
 #include <cstring>
 #include <vector>
 
+VkResult	CreateDebugUtilsMessengerEXT(
+		VkInstance instance,
+		const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo,
+		const VkAllocationCallbacks *pAllocator,
+		VkDebugUtilsMessengerEXT *pMessenger)
+{
+	auto	func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance,
+			"vkCreateDebugUtilsMessengerEXT");
+	if (func != nullptr)
+		return func(instance, pCreateInfo, pAllocator, pMessenger);
+	else
+	 	return VK_ERROR_EXTENSION_NOT_PRESENT;
+}
+
+void	DestroyDebugUtilsMessengerEXT(VkInstance instance,
+		VkDebugUtilsMessengerEXT messenger,
+		const VkAllocationCallbacks *pAllocator)
+{
+	auto	func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+	if (func != nullptr)
+		return func(instance, messenger, pAllocator);
+}
+
 class	HelloTriangleApplication
 {
 	public:
@@ -32,14 +55,31 @@ class	HelloTriangleApplication
 		}
 
 	private:
-		VkInstance	instance;
-		GLFWwindow*	window;
+		VkInstance					instance;
+		VkDebugUtilsMessengerEXT	debugMessenger;
+		GLFWwindow*					window;
+
+		static VKAPI_ATTR VkBool32 VKAPI_CALL	debugCallback(
+				VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+				VkDebugUtilsMessageTypeFlagsEXT messageType,
+				const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+				void* pUserData)
+		{
+			std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
+
+			return VK_FALSE;
+		};
 
 		std::vector<const char*>	getRequiredExtensions(void) {
 			uint32_t					glfwExtensionCount = 0;
 			const char**				glfwExtensions;
 
 			glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+
+			if (glfwExtensions == nullptr)
+			{
+				throw std::runtime_error("missing required Vulkan extensions for GLFW");
+			}
 
 			std::vector<const char *>	extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
 
@@ -103,23 +143,17 @@ class	HelloTriangleApplication
 
 		void	createInstance(void)
 		{
-			VkInstanceCreateInfo	createInfo{};
-			VkApplicationInfo		appInfo{};
+			VkInstanceCreateInfo		createInfo{};
+			VkApplicationInfo			appInfo{};
 
-			uint32_t				glfwExtensionCount = 0;
-			const char**			glfwExtensions;
+			uint32_t					glfwExtensionCount = 0;
+			std::vector<const char *>	extensions;
 
 			if (enableValidationLayers && !checkValidationLayerSupport()) {
 				throw std::runtime_error("requested validation layers are not available");
 			}
-			glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 
-			// We can avoid determining an intersection between available
-			// and required extensions, like the tutorial suggests, by
-			// simply checking if the call returns null.
-			if (glfwExtensions == nullptr) {
-				throw std::runtime_error("missing required Vulkan extensions for GLFW");
-			}
+			extensions = getRequiredExtensions();
 
 			appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 			appInfo.pApplicationName = "Hello Triangle";
@@ -131,8 +165,8 @@ class	HelloTriangleApplication
 			createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 			createInfo.pApplicationInfo = &appInfo;
 			createInfo.enabledLayerCount = glfwExtensionCount;
-			createInfo.ppEnabledExtensionNames = glfwExtensions;
-			createInfo.enabledLayerCount = 0;
+			createInfo.ppEnabledExtensionNames = extensions.data();
+			createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
 
 			if (enableValidationLayers) {
 				createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
@@ -153,10 +187,34 @@ class	HelloTriangleApplication
 			}
 		}
 
+		void	setupDebugMessenger(void)
+		{
+			VkDebugUtilsMessengerCreateInfoEXT	createInfo{};
+
+			if (!enableValidationLayers) return;
+
+			createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+			createInfo.messageSeverity =
+				VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+				VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+				VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+			createInfo.messageType =
+				VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+				VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+				VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+			createInfo.pfnUserCallback = debugCallback;
+			createInfo.pUserData = nullptr;
+
+			if (CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessenger) != VK_SUCCESS)
+				throw std::runtime_error("failed to setup debug messenger!");
+		}
+
 		void	initVulkan(void)
 		{
 			createInstance();
 			std::cout << "Vulkan instance created!" << std::endl;
+			setupDebugMessenger();
+			std::cout << "Debug messenger has been setup" << std::endl;
 		}
 
 		void	mainLoop(void)
@@ -169,6 +227,9 @@ class	HelloTriangleApplication
 
 		void	cleanup(void)
 		{
+			if (enableValidationLayers)
+				DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
+
 			vkDestroyInstance(instance, nullptr);
 
 			glfwDestroyWindow(window);
