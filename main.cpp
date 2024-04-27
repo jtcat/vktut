@@ -10,6 +10,19 @@
 #include <optional>
 #include <set>
 
+#ifdef NDEBUG
+const bool enableValidationLayers = false;
+#else
+const bool enableValidationLayers = true;
+#endif
+
+const uint32_t	WIDTH = 800;
+const uint32_t	HEIGHT = 600;
+
+const std::vector<const char *>	deviceExtensions = {
+	VK_KHR_SWAPCHAIN_EXTENSION_NAME
+};
+
 struct	QueueFamilyIndices {
 	std::optional<uint32_t>	graphicsFamily;
 	std::optional<uint32_t>	presentFamily;
@@ -47,18 +60,9 @@ void	DestroyDebugUtilsMessengerEXT(VkInstance instance,
 class	HelloTriangleApplication
 {
 	public:
-		const uint32_t	WIDTH = 800;
-		const uint32_t	HEIGHT = 600;
-
 		const std::vector<const char*>	validationLayers = {
 			"VK_LAYER_KHRONOS_validation"
 		};
-
-		#ifdef NDEBUG
-				const bool enableValidationLayers = false;
-		#else
-				const bool enableValidationLayers = true;
-		#endif
 
 		void	run(void)
 		{
@@ -138,7 +142,7 @@ class	HelloTriangleApplication
 			return true;
 		}
 
-		std::vector<VkExtensionProperties>	getSupportedExtensions(void)
+		std::vector<VkExtensionProperties>	getSupportedInstanceExtensions(void)
 		{
 			uint32_t	extensionCount = 0;
 			
@@ -185,9 +189,7 @@ class	HelloTriangleApplication
 			uint32_t			queueFamilyCount = 0;
 
 			vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
-
 			std::vector<VkQueueFamilyProperties>	queueFamilies(queueFamilyCount);
-
 			vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
 
 			int	i = 0;
@@ -213,26 +215,46 @@ class	HelloTriangleApplication
 			return indices;
 		}
 
+		bool	checkDeviceExtensionSupport(VkPhysicalDevice device)
+		{
+			uint32_t	extensionCount;
+
+			vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+			std::vector<VkExtensionProperties>	extensions(extensionCount);
+			vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, extensions.data());
+
+			std::set<std::string>	requiredExtensions(deviceExtensions.begin(),
+					deviceExtensions.end());
+
+			for (const auto& extension : extensions) {
+				requiredExtensions.erase(extension.extensionName);
+			}
+
+			return requiredExtensions.empty();
+		}
+
 		int	rateDeviceSuitability(VkPhysicalDevice device)
 		{
-			VkPhysicalDeviceProperties	deviceProperties;
-			VkPhysicalDeviceFeatures	deviceFeatures;
-			QueueFamilyIndices			indices;
-			int							score = 0;
+			VkPhysicalDeviceProperties		deviceProperties;
+			VkPhysicalDeviceFeatures		deviceFeatures;
+			QueueFamilyIndices				indices;
+			bool							extensionsSupported;
+			int								score = 0;
 
 			vkGetPhysicalDeviceProperties(device, &deviceProperties);
 			vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
 			indices = findQueueFamilies(device);
+			extensionsSupported = checkDeviceExtensionSupport(device);
+
+			if (!extensionsSupported || !indices.isComplete() || !deviceFeatures.geometryShader) {
+				return 0;
+			}
 
 			if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
 				score += 1000;
 			}
 
 			score += deviceProperties.limits.maxImageDimension2D;
-
-			if (!indices.isComplete() || !deviceFeatures.geometryShader) {
-				return 0;
-			}
 
 			return score;
 		}
@@ -328,9 +350,9 @@ class	HelloTriangleApplication
 				throw std::runtime_error("failed to create instance");
 			}
 
-			std::vector<VkExtensionProperties>	supportedExtensions = getSupportedExtensions();
+			std::vector<VkExtensionProperties>	supportedExtensions = getSupportedInstanceExtensions();
 
-			std::cout << "Available extensions:\n";
+			std::cout << "Available instance extensions:\n";
 			for (const auto& extension : supportedExtensions) {
 				std::cout << '\t' << extension.extensionName << '\n';
 			}
@@ -363,6 +385,8 @@ class	HelloTriangleApplication
 			createInfo.pQueueCreateInfos = queueCreateInfos.data();
 			createInfo.queueCreateInfoCount = queueCreateInfos.size();
 			createInfo.pEnabledFeatures = &deviceFeatures;
+			createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
+			createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
 			// For compatibility with older Vulkan implementations since
 			// device specific validation layers have been deprecated
