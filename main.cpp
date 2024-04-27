@@ -21,6 +21,10 @@ const bool enableValidationLayers = true;
 const uint32_t	WIDTH = 800;
 const uint32_t	HEIGHT = 600;
 
+const std::vector<const char*>	validationLayers = {
+	"VK_LAYER_KHRONOS_validation"
+};
+
 const std::vector<const char *>	deviceExtensions = {
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
@@ -68,10 +72,6 @@ void	DestroyDebugUtilsMessengerEXT(VkInstance instance,
 class	HelloTriangleApplication
 {
 	public:
-		const std::vector<const char*>	validationLayers = {
-			"VK_LAYER_KHRONOS_validation"
-		};
-
 		void	run(void)
 		{
 			initWindow();
@@ -84,13 +84,18 @@ class	HelloTriangleApplication
 		VkInstance					instance;
 		VkPhysicalDevice			physicalDevice = VK_NULL_HANDLE;
 		VkDevice					device;
+
 		VkDebugUtilsMessengerEXT	debugMessenger;
 
 		VkQueue						graphicsQueue;
 		VkQueue						presentQueue;
 
 		VkSurfaceKHR				surface;
+
 		VkSwapchainKHR				swapChain;
+		std::vector<VkImage>		swapChainImages;
+		VkFormat					swapChainImageFormat;
+		VkExtent2D					swapChainExtent;
 
 		GLFWwindow*					window;
 
@@ -560,6 +565,12 @@ class	HelloTriangleApplication
 			}
 
 			std::cout << "Created swap chain!" << std::endl;
+
+			vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr);
+			swapChainImages.resize(imageCount);
+			vkGetSwapchainImagesKHR(device, swapChain, &imageCount, swapChainImages.data());
+			swapChainImageFormat = surfaceFormat.format;
+			swapChainExtent = extent;
 		}
 
 		void	initVulkan(void)
