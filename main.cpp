@@ -623,11 +623,25 @@ class	HelloTriangleApplication
 
 		void	createGraphicsPipeline(void)
 		{
-			std::vector<char>	vertShaderCode = readFile("shaders/vert.spv");
-			std::vector<char>	fragShaderCode = readFile("shaders/frag.spv");
+			std::vector<char>				vertShaderCode = readFile("shaders/vert.spv");
+			std::vector<char>				fragShaderCode = readFile("shaders/frag.spv");
 
-			VkShaderModule		vertShaderModule = createShaderModule(vertShaderCode);
-			VkShaderModule		fragShaderModule = createShaderModule(fragShaderCode);
+			VkShaderModule					vertShaderModule = createShaderModule(vertShaderCode);
+			VkShaderModule					fragShaderModule = createShaderModule(fragShaderCode);
+
+			VkPipelineShaderStageCreateInfo	vertShaderStageInfo{};
+			VkPipelineShaderStageCreateInfo	fragShaderStageInfo{};
+			VkPipelineShaderStageCreateInfo	shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+
+			vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+			vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+			vertShaderStageInfo.module = vertShaderModule;
+			vertShaderStageInfo.pName = "main";
+
+			fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+			fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+			fragShaderStageInfo.module = fragShaderModule;
+			fragShaderStageInfo.pName = "main";
 
 			std::cout << "Vert shader size: " << vertShaderCode.size() << " bytes\n";
 			std::cout << "Frag shader size: " << fragShaderCode.size() << " bytes\n";
