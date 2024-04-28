@@ -12,6 +12,8 @@
 #include <limits>
 #include <algorithm>
 
+#include "readfile.h"
+
 #ifdef NDEBUG
 const bool enableValidationLayers = false;
 #else
@@ -603,6 +605,15 @@ class	HelloTriangleApplication
 			std::cout << "Created swap chain image views!" << std::endl;
 		}
 
+		void	createGraphicsPipeline(void)
+		{
+			std::vector<char>	vertShaderCode = readFile("shaders/vert.spv");
+			std::vector<char>	fragShaderCode = readFile("shaders/frag.spv");
+
+			std::cout << "Vert shader size: " << vertShaderCode.size() << " bytes\n";
+			std::cout << "Frag shader size: " << fragShaderCode.size() << " bytes\n";
+		}
+
 		void	initVulkan(void)
 		{
 			createInstance();
@@ -614,6 +625,7 @@ class	HelloTriangleApplication
 			createLogicalDevice();
 			createSwapChain();
 			createImageViews();
+			createGraphicsPipeline();
 		}
 
 		void	mainLoop(void)
