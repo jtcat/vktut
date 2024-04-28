@@ -605,13 +605,35 @@ class	HelloTriangleApplication
 			std::cout << "Created swap chain image views!" << std::endl;
 		}
 
+		VkShaderModule	createShaderModule(const std::vector<char>& code)
+		{
+			VkShaderModuleCreateInfo	createInfo;
+			VkShaderModule				shaderModule;
+
+			createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+			createInfo.codeSize = code.size();
+			createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+
+			if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
+				throw std::runtime_error("failed to create shader module!");
+			}
+			
+			return shaderModule;
+		}
+
 		void	createGraphicsPipeline(void)
 		{
 			std::vector<char>	vertShaderCode = readFile("shaders/vert.spv");
 			std::vector<char>	fragShaderCode = readFile("shaders/frag.spv");
 
+			VkShaderModule		vertShaderModule = createShaderModule(vertShaderCode);
+			VkShaderModule		fragShaderModule = createShaderModule(fragShaderCode);
+
 			std::cout << "Vert shader size: " << vertShaderCode.size() << " bytes\n";
 			std::cout << "Frag shader size: " << fragShaderCode.size() << " bytes\n";
+
+			vkDestroyShaderModule(device, vertShaderModule, nullptr);
+			vkDestroyShaderModule(device, fragShaderModule, nullptr);
 		}
 
 		void	initVulkan(void)
