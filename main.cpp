@@ -23,12 +23,17 @@ const bool enableValidationLayers = true;
 const uint32_t	WIDTH = 800;
 const uint32_t	HEIGHT = 600;
 
-const std::vector<const char*>	validationLayers = {
+const std::vector<const char*>		validationLayers = {
 	"VK_LAYER_KHRONOS_validation"
 };
 
-const std::vector<const char *>	deviceExtensions = {
+const std::vector<const char *>		deviceExtensions = {
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME
+};
+
+const std::vector<VkDynamicState>	dynamicStates = {
+	VK_DYNAMIC_STATE_VIEWPORT,
+	VK_DYNAMIC_STATE_SCISSOR
 };
 
 struct	SwapChainSupportDetails {
@@ -99,6 +104,8 @@ class	HelloTriangleApplication
 		std::vector<VkImageView>	swapChainImageViews;
 		VkFormat					swapChainImageFormat;
 		VkExtent2D					swapChainExtent;
+
+		VkPipelineLayout			pipelineLayout;
 
 		GLFWwindow*					window;
 
@@ -623,15 +630,93 @@ class	HelloTriangleApplication
 
 		void	createGraphicsPipeline(void)
 		{
-			std::vector<char>				vertShaderCode = readFile("shaders/vert.spv");
-			std::vector<char>				fragShaderCode = readFile("shaders/frag.spv");
+			std::vector<char>					vertShaderCode = readFile("shaders/vert.spv");
+			std::vector<char>					fragShaderCode = readFile("shaders/frag.spv");
 
-			VkShaderModule					vertShaderModule = createShaderModule(vertShaderCode);
-			VkShaderModule					fragShaderModule = createShaderModule(fragShaderCode);
+			VkShaderModule						vertShaderModule = createShaderModule(vertShaderCode);
+			VkShaderModule						fragShaderModule = createShaderModule(fragShaderCode);
 
-			VkPipelineShaderStageCreateInfo	vertShaderStageInfo{};
-			VkPipelineShaderStageCreateInfo	fragShaderStageInfo{};
-			VkPipelineShaderStageCreateInfo	shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+			VkPipelineShaderStageCreateInfo		vertShaderStageInfo{};
+			VkPipelineShaderStageCreateInfo		fragShaderStageInfo{};
+			VkPipelineShaderStageCreateInfo		shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+
+			VkPipelineDynamicStateCreateInfo		dynamicState{};
+			VkPipelineInputAssemblyStateCreateInfo	inputAssembly{};
+			VkPipelineViewportStateCreateInfo		viewportState{};
+			VkPipelineRasterizationStateCreateInfo	rasterizer{};
+			VkPipelineVertexInputStateCreateInfo	vertexInputInfo{};
+			VkPipelineMultisampleStateCreateInfo	multisampling{};
+			VkPipelineColorBlendAttachmentState		colorBlendAttachment{};
+			VkPipelineColorBlendStateCreateInfo		colorBlending{};
+
+			VkViewport								viewport{};
+
+			VkRect2D								scissor{};
+
+			VkPipelineLayoutCreateInfo				pipelineLayoutInfo{};
+
+			pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+
+			if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
+				throw std::runtime_error("failed to create pipeline layout!");
+			}
+
+			scissor.offset = {0, 0};
+			scissor.extent = swapChainExtent;
+
+			viewport.x = 0.0f;
+			viewport.y = 0.0f;
+			viewport.width = (float)swapChainExtent.width;
+			viewport.height = (float)swapChainExtent.height;
+			viewport.minDepth = 0.0f;
+			viewport.maxDepth = 1.0f;
+
+			viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+			viewportState.viewportCount = 1;
+			viewportState.pViewports = &viewport;
+			viewportState.scissorCount = 1;
+			viewportState.pScissors = &scissor;
+
+			colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+			colorBlending.logicOpEnable = VK_FALSE;
+			colorBlending.logicOp = VK_LOGIC_OP_COPY;
+			colorBlending.attachmentCount = 1;
+			colorBlending.pAttachments = &colorBlendAttachment;
+
+			colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT
+				| VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+			colorBlendAttachment.blendEnable = VK_FALSE;
+			colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+			colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+			colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+			colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+			colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+			colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+
+			multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+			multisampling.sampleShadingEnable = VK_FALSE;
+			multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+			rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+			rasterizer.depthClampEnable = VK_FALSE;
+			rasterizer.rasterizerDiscardEnable = VK_FALSE;
+			rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+			rasterizer.lineWidth = 1.0f;
+			rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+			rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+			rasterizer.depthBiasEnable = VK_FALSE;
+
+			vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+			vertexInputInfo.vertexBindingDescriptionCount = 0;
+			vertexInputInfo.vertexAttributeDescriptionCount = 0;
+
+			inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+			inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+			inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+			dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+			dynamicState.dynamicStateCount = dynamicStates.size();
+			dynamicState.pDynamicStates = dynamicStates.data();
 
 			vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 			vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
@@ -642,7 +727,7 @@ class	HelloTriangleApplication
 			fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 			fragShaderStageInfo.module = fragShaderModule;
 			fragShaderStageInfo.pName = "main";
-
+			
 			std::cout << "Vert shader size: " << vertShaderCode.size() << " bytes\n";
 			std::cout << "Frag shader size: " << fragShaderCode.size() << " bytes\n";
 
@@ -674,6 +759,8 @@ class	HelloTriangleApplication
 
 		void	cleanup(void)
 		{
+			vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+
 			for (auto imageView : swapChainImageViews) {
 				vkDestroyImageView(device, imageView, nullptr);
 			}
