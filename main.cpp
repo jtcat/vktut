@@ -111,6 +111,7 @@ class	HelloTriangleApplication
 		std::vector<VkFramebuffer>	swapChainFramebuffers;
 
 		VkCommandPool				commandPool;
+		VkCommandBuffer				commandBuffer;
 
 		GLFWwindow*					window;
 
@@ -665,6 +666,8 @@ class	HelloTriangleApplication
 			if (vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS) {
 				throw std::runtime_error("failed to create render pass");
 			}
+
+			std::cout << "created render pass" << std::endl;
 		}
 
 		void	createGraphicsPipeline(void)
@@ -821,6 +824,8 @@ class	HelloTriangleApplication
 					throw std::runtime_error("failed to create framebuffer");
 				}
 			}
+
+			std::cout << "created framebuffers" << std::endl;
 		}
 
 		void	createCommandPool(void)
@@ -834,6 +839,66 @@ class	HelloTriangleApplication
 
 			if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
 				throw std::runtime_error("failed to create command pool");
+			}
+		}
+
+		void	createCommandBuffer(void)
+		{
+			VkCommandBufferAllocateInfo	allocInfo{};
+
+			allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+			allocInfo.commandPool = commandPool;
+			allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+			allocInfo.commandBufferCount = 1;
+
+			if (vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer) != VK_SUCCESS) {
+				throw std::runtime_error("failed to allocate command buffer");
+			}
+			std::cout << "created command buffer" << std::endl;
+		}
+
+		void	recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t	imageIndex)
+		{
+			VkCommandBufferBeginInfo	beginInfo{};
+			VkRenderPassBeginInfo		renderPassInfo;
+			VkClearValue				clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
+			VkViewport					viewport{};
+			VkRect2D					scissor{};
+
+			beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+			if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
+				throw std::runtime_error("failed to begin recording command buffer");
+			}
+
+			renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+			renderPassInfo.renderPass = renderPass;
+			renderPassInfo.framebuffer = swapChainFramebuffers[imageIndex];
+			renderPassInfo.renderArea.offset = {0, 0};
+			renderPassInfo.renderArea.extent = swapChainExtent;
+			renderPassInfo.clearValueCount = 1;
+			renderPassInfo.pClearValues = &clearColor;
+			vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+
+			viewport.x = 0.0f;
+			viewport.y = 0.0f;
+			viewport.width = static_cast<float>(swapChainExtent.width);
+			viewport.height = static_cast<float>(swapChainExtent.height);
+			viewport.minDepth = 0.0f;
+			viewport.maxDepth = 0.0f;
+			vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+			scissor.offset = {0, 0};
+			scissor.extent = swapChainExtent;
+			vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+			vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+
+			vkCmdEndRenderPass(commandBuffer);
+
+			if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
+				throw std::runtime_error("failed to record command buffer");
 			}
 		}
 
@@ -852,6 +917,7 @@ class	HelloTriangleApplication
 			createGraphicsPipeline();
 			createFramebuffers();
 			createCommandPool();
+			createCommandBuffer();
 		}
 
 		void	mainLoop(void)
