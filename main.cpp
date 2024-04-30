@@ -110,6 +110,8 @@ class	HelloTriangleApplication
 
 		VkPipeline					graphicsPipeline;
 
+		std::vector<VkFramebuffer>	swapChainFramebuffers;
+
 		GLFWwindow*					window;
 
 		static VKAPI_ATTR VkBool32 VKAPI_CALL	debugCallback(
@@ -796,6 +798,31 @@ class	HelloTriangleApplication
 			vkDestroyShaderModule(device, fragShaderModule, nullptr);
 		}
 
+		void	createFramebuffers(void)
+		{
+			swapChainFramebuffers.resize(swapChainImageViews.size());
+
+			for (size_t i = 0; i < swapChainImageViews.size(); i++) {
+				VkImageView	attachments[] = {
+					swapChainImageViews[i]
+				};
+
+				VkFramebufferCreateInfo	framebufferInfo{};
+
+				framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+				framebufferInfo.renderPass = renderPass;
+				framebufferInfo.attachmentCount = 1;
+				framebufferInfo.pAttachments = attachments;
+				framebufferInfo.width = swapChainExtent.width;
+				framebufferInfo.height = swapChainExtent.height;
+				framebufferInfo.layers = 1;
+
+				if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &swapChainFramebuffers[i]) != VK_SUCCESS) {
+					throw std::runtime_error("failed to create framebuffer");
+				}
+			}
+		}
+
 		void	initVulkan(void)
 		{
 			createInstance();
@@ -809,6 +836,7 @@ class	HelloTriangleApplication
 			createImageViews();
 			createRenderPass();
 			createGraphicsPipeline();
+			createFramebuffers();
 		}
 
 		void	mainLoop(void)
@@ -821,10 +849,12 @@ class	HelloTriangleApplication
 
 		void	cleanup(void)
 		{
+			for (auto framebuffer : swapChainFramebuffers) {
+				vkDestroyFramebuffer(device, framebuffer, nullptr);
+			}
+
 			vkDestroyPipeline(device, graphicsPipeline, nullptr);
-
 			vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
-
 			vkDestroyRenderPass(device, renderPass, nullptr);
 
 			for (auto imageView : swapChainImageViews) {
@@ -832,7 +862,6 @@ class	HelloTriangleApplication
 			}
 
 			vkDestroySwapchainKHR(device, swapChain, nullptr);
-
 			vkDestroyDevice(device, nullptr);
 
 			if (enableValidationLayers) {
@@ -840,11 +869,9 @@ class	HelloTriangleApplication
 			}
 
 			vkDestroySurfaceKHR(instance, surface, nullptr);
-
 			vkDestroyInstance(instance, nullptr);
 
 			glfwDestroyWindow(window);
-
 			glfwTerminate();
 			std::cout << "Cleanup..." << std::endl;
 		}
