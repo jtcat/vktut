@@ -107,10 +107,10 @@ class	HelloTriangleApplication
 
 		VkRenderPass				renderPass;
 		VkPipelineLayout			pipelineLayout;
-
 		VkPipeline					graphicsPipeline;
-
 		std::vector<VkFramebuffer>	swapChainFramebuffers;
+
+		VkCommandPool				commandPool;
 
 		GLFWwindow*					window;
 
@@ -823,6 +823,20 @@ class	HelloTriangleApplication
 			}
 		}
 
+		void	createCommandPool(void)
+		{
+			VkCommandPoolCreateInfo	poolInfo{};
+			QueueFamilyIndices		queueFamilyIndices = findQueueFamilies(physicalDevice);
+
+			poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+			poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+			poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+
+			if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
+				throw std::runtime_error("failed to create command pool");
+			}
+		}
+
 		void	initVulkan(void)
 		{
 			createInstance();
@@ -837,6 +851,7 @@ class	HelloTriangleApplication
 			createRenderPass();
 			createGraphicsPipeline();
 			createFramebuffers();
+			createCommandPool();
 		}
 
 		void	mainLoop(void)
@@ -849,6 +864,8 @@ class	HelloTriangleApplication
 
 		void	cleanup(void)
 		{
+			vkDestroyCommandPool(device, commandPool, nullptr);
+
 			for (auto framebuffer : swapChainFramebuffers) {
 				vkDestroyFramebuffer(device, framebuffer, nullptr);
 			}
