@@ -943,6 +943,9 @@ class	HelloTriangleApplication
 			VkPresentInfoKHR		presentInfo{};
 			VkSwapchainKHR			swapChains[] = {swapChain};
 
+			vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
+			vkResetFences(device, 1, &inFlightFence);
+
 			vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
 			vkResetCommandBuffer(commandBuffer, 0);
 			recordCommandBuffer(commandBuffer, imageIndex);
@@ -955,9 +958,6 @@ class	HelloTriangleApplication
 			submitInfo.pCommandBuffers = &commandBuffer;
 			submitInfo.signalSemaphoreCount = 1;
 			submitInfo.pSignalSemaphores = &renderFinishedSemaphore;
-
-			vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
-			vkResetFences(device, 1, &inFlightFence);
 
 			if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFence) != VK_SUCCESS) {
 				throw std::runtime_error("failed to submit draw command buffer");
@@ -999,6 +999,8 @@ class	HelloTriangleApplication
 				glfwPollEvents();
 				drawFrame();
 			}
+
+			vkDeviceWaitIdle(device);
 		}
 
 		void	cleanup(void)
