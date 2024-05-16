@@ -10,7 +10,9 @@ all:	$(NAME)
 readfile.o:	readfile.cpp readfile.h
 	$(CXX) $(CFLAGS) -c $< -o $@
 
-$(NAME):	main.cpp readfile.o
+main.o:	main.cpp HelloTriApp.h
+
+$(NAME):	main.o readfile.o
 	$(CXX) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 test:	$(NAME)
