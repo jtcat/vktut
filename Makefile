@@ -1,26 +1,45 @@
-CXX = g++
-#CFLAGS = -std=c++17 -g -O0 -fsanitize=address
-CFLAGS = -std=c++17 -g -O2
-LDFLAGS = -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi
+CXX := g++
+
+CXXFLAGS := -O2
+
+CPPFLAGS := -std=c++17
+
+DEPDIR := .deps
+
+DEPFLAGS = -MT $@ -MD -MP -MF $(DEPDIR)/$*.d
+
+LDFLAGS := -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi
+
+COMPILE.cc = $(CXX) $(DEPFLAGS) $(CPPFLAGS) $(CXXFLAGS) -c
 
 NAME = VulkanTest
 
-all:	$(NAME)
+SRCS = main.cpp HelloTriApp.cpp readfile.cpp
 
-readfile.o:	readfile.cpp readfile.h
-	$(CXX) $(CFLAGS) -c $< -o $@
+OBJS = $(SRCS:.cpp=.o)
 
-main.o:	main.cpp HelloTriApp.h
+DEPFILES := $(SRCS:%.cpp=$(DEPDIR)/%.d)
+$(DEPDIR)/%.d: ;
 
-$(NAME):	main.o readfile.o
-	$(CXX) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+$(DEPDIR): ; @mkdir -p $@
+
+all: $(NAME)
+
+%.o : %.cpp
+%.o : %.cpp $(DEPDIR)/%.d | $(DEPDIR)
+	$(COMPILE.cc) -o $@ $<
+
+$(NAME): $(OBJS)
+	$(CXX) -o $@ $(OBJS) $(LDFLAGS)
 
 test:	$(NAME)
 	./$(NAME)
 
 clean:
-	rm -f $(NAME)
+	$(RM) -r $(NAME) $(OBJS) $(DEPDIR)
 
 re:	clean all
 
-.PHONY: test clean
+.PHONY: all test clean re
+
+-include $(wildcard $(DEPFILES))
