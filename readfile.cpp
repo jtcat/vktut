@@ -1,5 +1,4 @@
 #include "readfile.h"
-
 #include <fstream>
 
 std::vector<char>	readFile(const std::string& filename) {
