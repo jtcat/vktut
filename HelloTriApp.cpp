@@ -314,6 +314,20 @@ std::string	HelloTriApp::getPhysicalDeviceName(VkPhysicalDevice&	device)
 	return std::string(deviceProperties.deviceName);
 }
 
+uint32_t	HelloTriApp::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
+{
+	VkPhysicalDeviceMemoryProperties	memProperties;
+
+	vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
+	for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) { 
+		if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+			return i;
+		}
+	}
+
+	throw std::runtime_error("failed to find suitable memory type!");
+}
+
 static void	framebufferResizeCallback(GLFWwindow* window, int width, int height) {
 	auto app = reinterpret_cast<HelloTriApp*>(glfwGetWindowUserPointer(window));
 	app->framebufferResized = true;
@@ -697,9 +711,14 @@ void	HelloTriApp::createGraphicsPipeline(void)
 	rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
 	rasterizer.depthBiasEnable = VK_FALSE;
 
+	auto	bindingDescription = Vertex::getBindingDescription();
+	auto	attributeDescriptions = Vertex::getAttributeDescriptions();
+
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputInfo.vertexBindingDescriptionCount = 0;
-	vertexInputInfo.vertexAttributeDescriptionCount = 0;
+	vertexInputInfo.vertexBindingDescriptionCount = 1;
+	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
 	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
 	inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -790,6 +809,39 @@ void	HelloTriApp::createCommandPool(void)
 	}
 }
 
+void	HelloTriApp::createVertexBuffer(void)
+{
+	VkMemoryRequirements	memRequirements;
+	VkBufferCreateInfo		bufferInfo{};
+	VkMemoryAllocateInfo	allocInfo{};
+
+	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	bufferInfo.size = sizeof(vertices[0]) * vertices.size();
+	bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+	if (vkCreateBuffer(device, &bufferInfo, nullptr, &vertexBuffer) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create vertex buffer!");
+	}
+
+	vkGetBufferMemoryRequirements(device, vertexBuffer, &memRequirements);
+
+	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	allocInfo.allocationSize = memRequirements.size;
+	allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+	if (vkAllocateMemory(device, &allocInfo, nullptr, &vertexBufferMemory) != VK_SUCCESS) {
+		throw std::runtime_error("failed to allocate vertex buffer memory!");
+	}
+
+	vkBindBufferMemory(device, vertexBuffer, vertexBufferMemory, 0);
+
+	void*	data;
+	vkMapMemory(device, vertexBufferMemory, 0, bufferInfo.size, 0, &data);
+	memcpy(data, vertices.data(), (size_t) bufferInfo.size);
+	vkUnmapMemory(device, vertexBufferMemory);
+}
+
 void	HelloTriApp::createCommandBuffers(void)
 {
 	commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
@@ -830,6 +882,10 @@ void	HelloTriApp::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t	im
 	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
+	VkBuffer		vertexBuffers[] = {vertexBuffer};
+	VkDeviceSize	offsets[] = {0};
+	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+
 	viewport.x = 0.0f;
 	viewport.y = 0.0f;
 	viewport.width = static_cast<float>(swapChainExtent.width);
@@ -842,7 +898,7 @@ void	HelloTriApp::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t	im
 	scissor.extent = swapChainExtent;
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-	vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+	vkCmdDraw(commandBuffer, static_cast<uint32_t>(vertices.size()), 1, 0, 0);
 
 	vkCmdEndRenderPass(commandBuffer);
 
@@ -950,6 +1006,7 @@ void	HelloTriApp::initVulkan(void)
 	createGraphicsPipeline();
 	createFramebuffers();
 	createCommandPool();
+	createVertexBuffer();
 	createCommandBuffers();
 	createSyncObjects();
 }
@@ -968,6 +1025,9 @@ void	HelloTriApp::mainLoop(void)
 void	HelloTriApp::cleanup(void)
 {
 	cleanupSwapChain();
+
+	vkDestroyBuffer(device, vertexBuffer, nullptr);
+	vkFreeMemory(device, vertexBufferMemory, nullptr);
 
 	for (size_t i=0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);

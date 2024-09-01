@@ -3,11 +3,13 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#include <array>
 #include <cstdlib>
 #include <string>
 #include <cstring>
 #include <vector>
 #include <optional>
+#include <glm/glm.hpp>
 
 #ifdef NDEBUG
 const bool enableValidationLayers = false;
@@ -60,6 +62,43 @@ void	DestroyDebugUtilsMessengerEXT(VkInstance instance,
 		VkDebugUtilsMessengerEXT messenger,
 		const VkAllocationCallbacks *pAllocator);
 
+struct	Vertex {
+	glm::vec2	pos;
+	glm::vec3	color;
+
+	static VkVertexInputBindingDescription	getBindingDescription() {
+		VkVertexInputBindingDescription		bindingDescription{};
+
+		bindingDescription.binding = 0;
+		bindingDescription.stride = sizeof(Vertex);
+		bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+		return bindingDescription;
+	}
+
+	static	std::array<VkVertexInputAttributeDescription, 2>	getAttributeDescriptions() {
+		std::array<VkVertexInputAttributeDescription, 2>	attributeDescriptions{};
+
+		attributeDescriptions[0].binding = 0;
+		attributeDescriptions[0].location = 0;
+		attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+		attributeDescriptions[0].offset = offsetof(Vertex, pos);
+
+		attributeDescriptions[1].binding = 0;
+		attributeDescriptions[1].location = 1;
+		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+		attributeDescriptions[1].offset = offsetof(Vertex, color);
+
+		return attributeDescriptions;
+	}
+};
+
+const	std::vector<Vertex>	vertices = {
+	{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+	{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+	{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+};
+
 class	HelloTriApp
 {
 	public:
@@ -91,6 +130,9 @@ class	HelloTriApp
 		std::vector<VkFramebuffer>	swapChainFramebuffers;
 
 		VkCommandPool				commandPool;
+
+		VkBuffer					vertexBuffer;
+		VkDeviceMemory				vertexBufferMemory;
 
 		std::vector<VkCommandBuffer>	commandBuffers;
 		std::vector<VkSemaphore>		imageAvailableSemaphores;
@@ -136,6 +178,8 @@ class	HelloTriApp
 
 		std::string	getPhysicalDeviceName(VkPhysicalDevice&	device);
 
+		uint32_t	findMemoryType(uint32_t	typeFilter, VkMemoryPropertyFlags properties);
+
 		void	initWindow(void);
 
 		void	createInstance(void);
@@ -163,6 +207,8 @@ class	HelloTriApp
 		void	createCommandPool(void);
 
 		void	createCommandBuffers(void);
+
+		void	createVertexBuffer(void);
 
 		void	recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t	imageIndex);
 
