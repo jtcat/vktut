@@ -314,6 +314,11 @@ std::string	HelloTriApp::getPhysicalDeviceName(VkPhysicalDevice&	device)
 	return std::string(deviceProperties.deviceName);
 }
 
+static void	framebufferResizeCallback(GLFWwindow* window, int width, int height) {
+	auto app = reinterpret_cast<HelloTriApp*>(glfwGetWindowUserPointer(window));
+	app->framebufferResized = true;
+}
+
 void	HelloTriApp::initWindow(void)
 {
 	glfwInit();
@@ -322,6 +327,8 @@ void	HelloTriApp::initWindow(void)
 	glfwWindowHint(GLFW_RED_BITS, GLFW_FALSE);
 
 	window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
+	glfwSetWindowUserPointer(window, this);
+	glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
 	std::cout << "Window created!" << std::endl;
 }
 
@@ -488,6 +495,36 @@ void	HelloTriApp::createSwapChain(void)
 	vkGetSwapchainImagesKHR(device, swapChain, &imageCount, swapChainImages.data());
 	swapChainImageFormat = surfaceFormat.format;
 	swapChainExtent = extent;
+}
+
+void	HelloTriApp::cleanupSwapChain(void) {
+	for (size_t i = 0; i < swapChainFramebuffers.size(); i++) {
+		vkDestroyFramebuffer(device, swapChainFramebuffers[i], nullptr);
+	}
+
+	for (size_t i = 0; i < swapChainImageViews.size(); i++) {
+		vkDestroyImageView(device, swapChainImageViews[i], nullptr);
+	}
+
+	vkDestroySwapchainKHR(device, swapChain, nullptr);
+}
+
+void	HelloTriApp::recreateSwapChain(void) {
+	int width = 0, height = 0;
+
+	glfwGetFramebufferSize(window, &width, &height);
+	while (width == 0 || height == 0) {
+		glfwGetFramebufferSize(window, &width, &height);
+		glfwWaitEvents();
+	}
+
+	vkDeviceWaitIdle(device);
+
+	cleanupSwapChain();
+
+	createSwapChain();
+	createImageViews();
+	createFramebuffers();
 }
 
 void	HelloTriApp::createImageViews(void)
@@ -839,6 +876,7 @@ void	HelloTriApp::createSyncObjects(void)
 
 void	HelloTriApp::drawFrame(void)
 {
+	VkResult				result;
 	uint32_t				imageIndex;
 	VkSubmitInfo			submitInfo{};
 	VkPipelineStageFlags	waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
@@ -846,9 +884,18 @@ void	HelloTriApp::drawFrame(void)
 	VkSwapchainKHR			swapChains[] = {swapChain};
 
 	vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);
+
+	result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+
+	if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+		recreateSwapChain();
+		return ;
+	} else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+		throw std::runtime_error("failed to acquire swap chain image!");
+	}
+
 	vkResetFences(device, 1, &inFlightFences[currentFrame]);
 
-	vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
 	vkResetCommandBuffer(commandBuffers[currentFrame], 0);
 	recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
 
@@ -876,7 +923,14 @@ void	HelloTriApp::drawFrame(void)
 	presentInfo.pSwapchains = swapChains;
 	presentInfo.pImageIndices = &imageIndex;
 
-	vkQueuePresentKHR(graphicsQueue, &presentInfo);
+	result = vkQueuePresentKHR(graphicsQueue, &presentInfo);
+
+	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized) {
+		framebufferResized = false;
+		recreateSwapChain();
+	} else if (result != VK_SUCCESS) {
+		throw std::runtime_error("failed to acquire swap chain image!");
+	}
 
 	currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
@@ -913,6 +967,8 @@ void	HelloTriApp::mainLoop(void)
 
 void	HelloTriApp::cleanup(void)
 {
+	cleanupSwapChain();
+
 	for (size_t i=0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
 		vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
@@ -921,19 +977,10 @@ void	HelloTriApp::cleanup(void)
 
 	vkDestroyCommandPool(device, commandPool, nullptr);
 
-	for (auto framebuffer : swapChainFramebuffers) {
-		vkDestroyFramebuffer(device, framebuffer, nullptr);
-	}
-
 	vkDestroyPipeline(device, graphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 	vkDestroyRenderPass(device, renderPass, nullptr);
 
-	for (auto imageView : swapChainImageViews) {
-		vkDestroyImageView(device, imageView, nullptr);
-	}
-
-	vkDestroySwapchainKHR(device, swapChain, nullptr);
 	vkDestroyDevice(device, nullptr);
 
 	if (enableValidationLayers) {

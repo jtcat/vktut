@@ -63,6 +63,8 @@ void	DestroyDebugUtilsMessengerEXT(VkInstance instance,
 class	HelloTriApp
 {
 	public:
+		bool	framebufferResized = false;
+
 		void	run(void);
 
 	private:
@@ -141,6 +143,10 @@ class	HelloTriApp
 		void	createLogicalDevice(void);
 
 		void	createSurface(void);
+
+		void	cleanupSwapChain(void);
+
+		void	recreateSwapChain(void);
 
 		void	createSwapChain(void);
 
