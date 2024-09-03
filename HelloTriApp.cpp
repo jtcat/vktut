@@ -912,6 +912,27 @@ void	HelloTriApp::createVertexBuffer(void)
 	vkFreeMemory(device, stagingBufferMemory, nullptr);
 }
 
+void	HelloTriApp::createIndexBuffer(void)
+{
+	VkDeviceSize	bufferSize = sizeof(indices[0]) * indices.size();
+	VkBuffer		stagingBuffer;
+	VkDeviceMemory	stagingBufferMemory;
+	void*	data;
+
+	createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+	vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
+	memcpy(data, indices.data(), (size_t) bufferSize);
+	vkUnmapMemory(device, stagingBufferMemory);
+
+	createBuffer(bufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBuffer, indexBufferMemory);
+
+	copyBuffer(stagingBuffer, indexBuffer, bufferSize);
+
+	vkDestroyBuffer(device, stagingBuffer, nullptr);
+	vkFreeMemory(device, stagingBufferMemory, nullptr);
+}
+
 void	HelloTriApp::createCommandBuffers(void)
 {
 	commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
@@ -954,7 +975,9 @@ void	HelloTriApp::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t	im
 
 	VkBuffer		vertexBuffers[] = {vertexBuffer};
 	VkDeviceSize	offsets[] = {0};
+
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+	vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT16);
 
 	viewport.x = 0.0f;
 	viewport.y = 0.0f;
@@ -968,7 +991,7 @@ void	HelloTriApp::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t	im
 	scissor.extent = swapChainExtent;
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-	vkCmdDraw(commandBuffer, static_cast<uint32_t>(vertices.size()), 1, 0, 0);
+	vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
 	vkCmdEndRenderPass(commandBuffer);
 
@@ -1077,6 +1100,7 @@ void	HelloTriApp::initVulkan(void)
 	createFramebuffers();
 	createCommandPools();
 	createVertexBuffer();
+	createIndexBuffer();
 	createCommandBuffers();
 	createSyncObjects();
 }
@@ -1098,6 +1122,9 @@ void	HelloTriApp::cleanup(void)
 
 	vkDestroyBuffer(device, vertexBuffer, nullptr);
 	vkFreeMemory(device, vertexBufferMemory, nullptr);
+
+	vkDestroyBuffer(device, indexBuffer, nullptr);
+	vkFreeMemory(device, indexBufferMemory, nullptr);
 
 	for (size_t i=0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
