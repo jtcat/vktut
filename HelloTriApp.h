@@ -44,11 +44,13 @@ struct	SwapChainSupportDetails {
 struct	QueueFamilyIndices {
 	std::optional<uint32_t>	graphicsFamily;
 	std::optional<uint32_t>	presentFamily;
+	std::optional<uint32_t>	transferFamily;
 
 	bool	isComplete()
 	{
 		return graphicsFamily.has_value()
-			&& presentFamily.has_value();
+			&& presentFamily.has_value()
+			&& transferFamily.has_value();
 	}
 };
 
@@ -115,6 +117,7 @@ class	HelloTriApp
 
 		VkQueue						graphicsQueue;
 		VkQueue						presentQueue;
+		VkQueue						transferQueue;
 
 		VkSurfaceKHR				surface;
 
@@ -129,7 +132,8 @@ class	HelloTriApp
 		VkPipeline					graphicsPipeline;
 		std::vector<VkFramebuffer>	swapChainFramebuffers;
 
-		VkCommandPool				commandPool;
+		VkCommandPool				graphicsCommandPool;
+		VkCommandPool				transferCommandPool;
 
 		VkBuffer					vertexBuffer;
 		VkDeviceMemory				vertexBufferMemory;
@@ -163,6 +167,8 @@ class	HelloTriApp
 		SwapChainSupportDetails	querySwapChainSupport(VkPhysicalDevice device);
 
 		QueueFamilyIndices	findQueueFamilies(VkPhysicalDevice device);
+
+		std::vector<uint32_t>	getUniqueQueueFamilies(VkPhysicalDevice device);
 
 		bool	checkDeviceExtensionSupport(VkPhysicalDevice device);
 
@@ -204,9 +210,12 @@ class	HelloTriApp
 
 		void	createFramebuffers(void);
 
-		void	createCommandPool(void);
+		void	createCommandPools(void);
 
 		void	createCommandBuffers(void);
+
+		void	createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+		void	copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
 		void	createVertexBuffer(void);
 

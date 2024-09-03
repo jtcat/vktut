@@ -158,6 +158,9 @@ QueueFamilyIndices	HelloTriApp::findQueueFamilies(VkPhysicalDevice device)
 		if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
 			indices.graphicsFamily = i;
 		}
+		else if (queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT) {
+			indices.transferFamily = i;
+		}
 
 		if (indices.isComplete()) {
 			break;
@@ -167,6 +170,21 @@ QueueFamilyIndices	HelloTriApp::findQueueFamilies(VkPhysicalDevice device)
 	}
 
 	return indices;
+}
+
+std::vector<uint32_t>	HelloTriApp::getUniqueQueueFamilies(VkPhysicalDevice device) {
+	std::set<uint32_t>		index_set;
+	std::vector<uint32_t>	final_indices;
+	QueueFamilyIndices		indices = findQueueFamilies(device);
+
+	index_set.insert(indices.graphicsFamily.value());
+	index_set.insert(indices.presentFamily.value());
+	index_set.insert(indices.transferFamily.value());
+
+	final_indices.reserve(index_set.size());
+	std::copy(index_set.begin(), index_set.end(), std::back_inserter(final_indices));
+
+	return final_indices;
 }
 
 bool	HelloTriApp::checkDeviceExtensionSupport(VkPhysicalDevice device)
@@ -405,10 +423,7 @@ void	HelloTriApp::createLogicalDevice(void)
 	float									queuePriority = 1.0f;
 	std::vector<VkDeviceQueueCreateInfo>	queueCreateInfos;
 
-	std::set<uint32_t>						uniqueQueueFamilies = {
-		indices.graphicsFamily.value(),
-		indices.presentFamily.value()
-	};
+	std::vector<uint32_t>					uniqueQueueFamilies = getUniqueQueueFamilies(physicalDevice);
 
 	for (uint32_t queueFamily : uniqueQueueFamilies) {
 		VkDeviceQueueCreateInfo	queueCreateInfo{};
@@ -441,6 +456,7 @@ void	HelloTriApp::createLogicalDevice(void)
 	}
 
 	vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
+	vkGetDeviceQueue(device, indices.transferFamily.value(), 0, &transferQueue);
 }
 
 void	HelloTriApp::createSurface(void)
@@ -462,12 +478,7 @@ void	HelloTriApp::createSwapChain(void)
 
 	uint32_t			imageCount = swapChainSupport.capabilities.minImageCount + 1;
 
-	QueueFamilyIndices	indices = findQueueFamilies(physicalDevice);
-	uint32_t			queueFamilyIndices[] = {
-		indices.graphicsFamily.value(),
-		indices.presentFamily.value()
-	};
-
+	std::vector<uint32_t>	queueFamilyIndices = getUniqueQueueFamilies(physicalDevice);
 
 	if (swapChainSupport.capabilities.maxImageCount > 0
 			&& imageCount > swapChainSupport.capabilities.maxImageCount) {
@@ -488,15 +499,9 @@ void	HelloTriApp::createSwapChain(void)
 	createInfo.clipped = VK_TRUE;
 	createInfo.oldSwapchain = VK_NULL_HANDLE;
 
-	if (indices.graphicsFamily != indices.presentFamily) {
-		createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-		createInfo.queueFamilyIndexCount = 2;
-		createInfo.pQueueFamilyIndices = queueFamilyIndices;
-	} else {
-		createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		createInfo.queueFamilyIndexCount = 0;
-		createInfo.pQueueFamilyIndices = nullptr;
-	}
+	createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+	createInfo.queueFamilyIndexCount = queueFamilyIndices.size();
+	createInfo.pQueueFamilyIndices = queueFamilyIndices.data();
 
 	if (vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapChain) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create swap chain");
@@ -795,51 +800,116 @@ void	HelloTriApp::createFramebuffers(void)
 	std::cout << "created framebuffers" << std::endl;
 }
 
-void	HelloTriApp::createCommandPool(void)
+void	HelloTriApp::createCommandPools(void)
 {
-	VkCommandPoolCreateInfo	poolInfo{};
+	VkCommandPoolCreateInfo	graphicsPoolInfo{};
+	VkCommandPoolCreateInfo	transferPoolInfo{};
 	QueueFamilyIndices		queueFamilyIndices = findQueueFamilies(physicalDevice);
 
-	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-	poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+	graphicsPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	graphicsPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	graphicsPoolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
 
-	if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create command pool");
+	transferPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	transferPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+	transferPoolInfo.queueFamilyIndex = queueFamilyIndices.transferFamily.value();
+
+	if (vkCreateCommandPool(device, &graphicsPoolInfo, nullptr, &graphicsCommandPool) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create graphics command pool");
 	}
+
+	if (vkCreateCommandPool(device, &transferPoolInfo, nullptr, &transferCommandPool) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create tranfer command pool");
+	}
+}
+
+void	HelloTriApp::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
+	VkBufferCreateInfo		bufferInfo{};
+	VkMemoryAllocateInfo	allocInfo{};
+	VkMemoryRequirements	memRequirements;
+	std::vector<uint32_t>	queueFamilyIndices = getUniqueQueueFamilies(physicalDevice);
+
+	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	bufferInfo.size = size;
+	bufferInfo.usage = usage;
+	bufferInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
+	bufferInfo.queueFamilyIndexCount = queueFamilyIndices.size();
+	bufferInfo.pQueueFamilyIndices = queueFamilyIndices.data();
+
+	if (vkCreateBuffer(device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create buffer!");
+	}
+
+	vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
+
+	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	allocInfo.allocationSize = memRequirements.size;
+	allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
+
+	if (vkAllocateMemory(device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
+		throw std::runtime_error("failed to allocate buffer memory!");
+	}
+
+	vkBindBufferMemory(device, buffer, bufferMemory, 0);
+}
+
+void	HelloTriApp::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
+	VkCommandBufferAllocateInfo	allocInfo{};
+	VkCommandBuffer				commandBuffer;
+
+	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	allocInfo.commandPool = transferCommandPool;
+	allocInfo.commandBufferCount = 1;
+
+	if (vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer) != VK_SUCCESS) {
+		throw std::runtime_error("failed to allocate transfer command buffer!");
+	}
+
+	VkCommandBufferBeginInfo	beginInfo{};
+	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+	vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+	VkBufferCopy	copyRegion{};
+	copyRegion.srcOffset = 0;
+	copyRegion.dstOffset = 0;
+	copyRegion.size = size;
+
+	vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
+	vkEndCommandBuffer(commandBuffer);
+
+	VkSubmitInfo	submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &commandBuffer;
+
+	vkQueueSubmit(transferQueue, 1, &submitInfo, VK_NULL_HANDLE);
+	vkQueueWaitIdle(transferQueue);
+
+	vkFreeCommandBuffers(device, transferCommandPool, 1, &commandBuffer);
 }
 
 void	HelloTriApp::createVertexBuffer(void)
 {
-	VkMemoryRequirements	memRequirements;
-	VkBufferCreateInfo		bufferInfo{};
-	VkMemoryAllocateInfo	allocInfo{};
-
-	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	bufferInfo.size = sizeof(vertices[0]) * vertices.size();
-	bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-	if (vkCreateBuffer(device, &bufferInfo, nullptr, &vertexBuffer) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create vertex buffer!");
-	}
-
-	vkGetBufferMemoryRequirements(device, vertexBuffer, &memRequirements);
-
-	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	allocInfo.allocationSize = memRequirements.size;
-	allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-	if (vkAllocateMemory(device, &allocInfo, nullptr, &vertexBufferMemory) != VK_SUCCESS) {
-		throw std::runtime_error("failed to allocate vertex buffer memory!");
-	}
-
-	vkBindBufferMemory(device, vertexBuffer, vertexBufferMemory, 0);
-
+	VkDeviceSize	bufferSize = sizeof(vertices[0]) * vertices.size();
+	VkBuffer		stagingBuffer;
+	VkDeviceMemory	stagingBufferMemory;
 	void*	data;
-	vkMapMemory(device, vertexBufferMemory, 0, bufferInfo.size, 0, &data);
-	memcpy(data, vertices.data(), (size_t) bufferInfo.size);
-	vkUnmapMemory(device, vertexBufferMemory);
+
+	createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+	vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
+	memcpy(data, vertices.data(), (size_t) bufferSize);
+	vkUnmapMemory(device, stagingBufferMemory);
+
+	createBuffer(bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer, vertexBufferMemory);
+
+	copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
+
+	vkDestroyBuffer(device, stagingBuffer, nullptr);
+	vkFreeMemory(device, stagingBufferMemory, nullptr);
 }
 
 void	HelloTriApp::createCommandBuffers(void)
@@ -848,7 +918,7 @@ void	HelloTriApp::createCommandBuffers(void)
 	VkCommandBufferAllocateInfo	allocInfo{};
 
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.commandPool = commandPool;
+	allocInfo.commandPool = graphicsCommandPool;
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	allocInfo.commandBufferCount = (uint32_t)commandBuffers.size();
 
@@ -1005,7 +1075,7 @@ void	HelloTriApp::initVulkan(void)
 	createRenderPass();
 	createGraphicsPipeline();
 	createFramebuffers();
-	createCommandPool();
+	createCommandPools();
 	createVertexBuffer();
 	createCommandBuffers();
 	createSyncObjects();
@@ -1035,7 +1105,7 @@ void	HelloTriApp::cleanup(void)
 		vkDestroyFence(device, inFlightFences[i], nullptr);
 	}
 
-	vkDestroyCommandPool(device, commandPool, nullptr);
+	vkDestroyCommandPool(device, graphicsCommandPool, nullptr);
 
 	vkDestroyPipeline(device, graphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
