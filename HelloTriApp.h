@@ -9,7 +9,12 @@
 #include <cstring>
 #include <vector>
 #include <optional>
+
+#define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
+#include <chrono>
 
 #ifdef NDEBUG
 const bool enableValidationLayers = false;
@@ -95,6 +100,12 @@ struct	Vertex {
 	}
 };
 
+struct	UniformBufferObject {
+	glm::mat4	model;
+	glm::mat4	view;
+	glm::mat4	proj;
+};
+
 const	std::vector<Vertex>	vertices = {
 	{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
 	{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
@@ -133,15 +144,23 @@ class	HelloTriApp
 		VkExtent2D					swapChainExtent;
 
 		VkRenderPass				renderPass;
+		VkDescriptorSetLayout		descriptorSetLayout;
 		VkPipelineLayout			pipelineLayout;
 		VkPipeline					graphicsPipeline;
 		std::vector<VkFramebuffer>	swapChainFramebuffers;
+
+		VkDescriptorPool				descriptorPool;
+		std::vector<VkDescriptorSet>	descriptorSets;
 
 		VkCommandPool				graphicsCommandPool;
 		VkCommandPool				transferCommandPool;
 
 		VkBuffer					vertexBuffer;
 		VkDeviceMemory				vertexBufferMemory;
+
+		std::vector<VkBuffer>		uniformBuffers;
+		std::vector<VkDeviceMemory>	uniformBuffersMemory;
+		std::vector<void *>			uniformBuffersMapped;
 
 		VkBuffer					indexBuffer;
 		VkDeviceMemory				indexBufferMemory;
@@ -214,6 +233,8 @@ class	HelloTriApp
 
 		void	createRenderPass(void);
 
+		void	createDescriptorSetLayout(void);
+
 		void	createGraphicsPipeline(void);
 
 		void	createFramebuffers(void);
@@ -229,9 +250,17 @@ class	HelloTriApp
 
 		void	createIndexBuffer(void);
 
+		void	createUniformBuffers(void);
+
+		void	createDescriptorPool(void);
+
+		void	createDescriptorSets(void);
+
 		void	recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t	imageIndex);
 
 		void	createSyncObjects(void);
+
+		void	updateUniformBuffer(uint32_t currentFrame);
 
 		void	drawFrame(void);
 
